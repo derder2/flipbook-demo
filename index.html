@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>翻頁式介紹簡報</title>
+  <style>
+    :root {
+      --book-w: min(94vw, 1280px);
+      --book-h: calc(var(--book-w) * 9 / 16);
+      --radius: 24px;
+      --paper: #f8f8f5;
+      --panel: rgba(255,255,255,.86);
+      --text: #16202a;
+      --muted: #667085;
+      --accent: #eb8a2f;
+      --shadow: 0 22px 60px rgba(0,0,0,.16);
+      --flip-ms: 900ms;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 18%, rgba(255,205,128,.22), transparent 18%),
+        radial-gradient(circle at 82% 12%, rgba(165,224,185,.22), transparent 16%),
+        linear-gradient(135deg, #f7faf7 0%, #eef3ef 45%, #f7f4ee 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 14px 30px;
+    }
+    .topbar {
+      width: min(1280px, 96vw);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .title, .controls, .hint {
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,.9);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 28px rgba(0,0,0,.06);
+    }
+    .title {
+      border-radius: 18px;
+      padding: 12px 16px;
+    }
+    .title h1 {
+      margin: 0;
+      font-size: clamp(18px, 2.3vw, 28px);
+      line-height: 1.2;
+    }
+    .title p {
+      margin: 6px 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      border-radius: 999px;
+      padding: 8px 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: #fff;
+      color: var(--text);
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,.08);
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .counter {
+      min-width: 86px;
+      text-align: center;
+      font-weight: 900;
+      color: var(--accent);
+    }
+
+    .stage {
+      position: relative;
+      width: var(--book-w);
+      height: var(--book-h);
+      perspective: 2400px;
+    }
+    .book {
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+    .spread, .turning-leaf, .leaf-face {
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .static-half {
+      position: absolute;
+      top: 0;
+      width: 50%;
+      height: 100%;
+      background-repeat: no-repeat;
+      background-size: 200% 100%;
+      background-color: #fff;
+    }
+    .static-half.left { left: 0; background-position: left center; }
+    .static-half.right { right: 0; background-position: right center; }
+
+    .turning-leaf {
+      inset: auto;
+      top: 0;
+      height: 100%;
+      width: 50%;
+      z-index: 6;
+      transform-style: preserve-3d;
+      display: none;
+    }
+    .turning-leaf.forward {
+      left: 50%;
+      transform-origin: left center;
+    }
+    .turning-leaf.backward {
+      left: 0;
+      transform-origin: right center;
+    }
+    .turning-leaf.show { display: block; }
+    .turning-leaf.animating {
+      transition: transform var(--flip-ms) cubic-bezier(.22,.61,.36,1);
+    }
+
+    .leaf-face {
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      background-color: #fff;
+    }
+    .leaf-art {
+      position: absolute;
+      inset: 0;
+      background-repeat: no-repeat;
+      background-size: 200% 100%;
+      transform-origin: center center;
+    }
+    .leaf-art.mirrored { transform: scaleX(-1); }
+    .turning-leaf.forward .back  { transform: rotateY(180deg); }
+    .turning-leaf.backward .back  { transform: rotateY(180deg); }
+
+    .leaf-face::before,
+    .leaf-face::after,
+    .static-half::before,
+    .static-half::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .turning-leaf.forward .front::before,
+    .static-half.left.shadowed::before {
+      background: linear-gradient(90deg, rgba(0,0,0,.24) 0%, rgba(0,0,0,.08) 10%, transparent 40%);
+    }
+    .turning-leaf.forward .back::before,
+    .static-half.right.shadowed::before {
+      background: linear-gradient(90deg, transparent 58%, rgba(0,0,0,.08) 88%, rgba(0,0,0,.22) 100%);
+    }
+    .turning-leaf.backward .front::before {
+      background: linear-gradient(90deg, transparent 58%, rgba(0,0,0,.08) 88%, rgba(0,0,0,.22) 100%);
+    }
+    .turning-leaf.backward .back::before {
+      background: linear-gradient(90deg, rgba(0,0,0,.24) 0%, rgba(0,0,0,.08) 10%, transparent 40%);
+    }
+    .leaf-face::after, .static-half::after {
+      background: linear-gradient(180deg, rgba(255,255,255,.08), transparent 14%, transparent 84%, rgba(0,0,0,.05));
+    }
+
+    .spine {
+      position: absolute;
+      left: 50%;
+      top: 1.4%;
+      bottom: 1.4%;
+      width: 28px;
+      transform: translateX(-50%);
+      z-index: 9;
+      pointer-events: none;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        rgba(0,0,0,.12) 0%,
+        rgba(255,255,255,.55) 18%,
+        rgba(0,0,0,.11) 50%,
+        rgba(255,255,255,.55) 82%,
+        rgba(0,0,0,.12) 100%);
+      box-shadow: inset 0 0 18px rgba(255,255,255,.75), 0 0 16px rgba(0,0,0,.08);
+      mix-blend-mode: multiply;
+      opacity: .72;
+    }
+    .book::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: linear-gradient(90deg, rgba(0,0,0,.05), transparent 10%, transparent 90%, rgba(0,0,0,.05));
+    }
+
+    .click-zone {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 22%;
+      z-index: 15;
+      cursor: pointer;
+    }
+    .click-zone.left { left: 0; }
+    .click-zone.right { right: 0; }
+    .click-zone:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17,24,39,.72);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .hint {
+      width: min(1280px, 96vw);
+      border-radius: 999px;
+      padding: 10px 14px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .thumbs {
+      width: min(1280px, 96vw);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+      gap: 12px;
+    }
+    .thumb {
+      border: 0;
+      border-radius: 16px;
+      padding: 8px;
+      background: rgba(255,255,255,.75);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 22px rgba(0,0,0,.06);
+      cursor: pointer;
+    }
+    .thumb.active {
+      outline: 3px solid rgba(235,138,47,.35);
+      transform: translateY(-2px);
+    }
+    .thumb img {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      display: block;
+      border-radius: 10px;
+    }
+    .thumb span {
+      display: block;
+      text-align: center;
+      font-size: 12px;
+      margin-top: 6px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    @media (max-width: 900px) {
+      :root { --book-w: 96vw; }
+      .click-zone { width: 26%; }
+      .thumbs { grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="title">
+      <h1>翻頁式簡報動畫</h1>
+      <p>頁面右下角和左下角可點選翻頁。</p>
+    </div>
+    <div class="controls">
+      <button id="prevBtn">上一頁</button>
+      <div class="counter" id="counter">1 / 16</div>
+      <button id="nextBtn">下一頁</button>
+      <button id="autoBtn">自動翻頁</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="book">
+      <div class="spread" id="spread">
+        <div class="static-half left" id="leftHalf"></div>
+        <div class="static-half right" id="rightHalf"></div>
+      </div>
+      <div class="turning-leaf forward" id="leaf">
+        <div class="leaf-face front" id="leafFront"><div class="leaf-art mirrored" id="leafFrontArt"></div></div>
+        <div class="leaf-face back" id="leafBack"><div class="leaf-art mirrored" id="leafBackArt"></div></div>
+      </div>
+      <div class="spine"></div>
+    </div>
+    <div class="click-zone left" data-tip="上一頁"></div>
+    <div class="click-zone right" data-tip="下一頁"></div>
+  </div>
+
+  <div class="hint">操作方式：點左右兩側、按鍵盤方向鍵，或點下方縮圖跳頁。可翻頁流灠觀看。</div>
+  <div class="thumbs" id="thumbs"></div>
+
+  <script>
+    const pages = Array.from({ length: 16 }, (_, i) => `page-${String(i + 1).padStart(2, '0')}.jpg`);
+
+    const leftHalf = document.getElementById('leftHalf');
+    const rightHalf = document.getElementById('rightHalf');
+    const leaf = document.getElementById('leaf');
+    const leafFront = document.getElementById('leafFront');
+    const leafBack = document.getElementById('leafBack');
+    const leafFrontArt = document.getElementById('leafFrontArt');
+    const leafBackArt = document.getElementById('leafBackArt');
+    const thumbs = document.getElementById('thumbs');
+    const counter = document.getElementById('counter');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const autoBtn = document.getElementById('autoBtn');
+    const leftZone = document.querySelector('.click-zone.left');
+    const rightZone = document.querySelector('.click-zone.right');
+
+    let current = 0;
+    let animating = false;
+    let autoTimer = null;
+
+    function setSpread(pageIndex) {
+      leftHalf.style.backgroundImage = `url('${pages[pageIndex]}')`;
+      rightHalf.style.backgroundImage = `url('${pages[pageIndex]}')`;
+      leftHalf.classList.remove('shadowed');
+      rightHalf.classList.remove('shadowed');
+    }
+
+    function updateUI() {
+      setSpread(current);
+      counter.textContent = `${current + 1} / ${pages.length}`;
+      prevBtn.disabled = animating || current === 0;
+      nextBtn.disabled = animating || current === pages.length - 1;
+      autoBtn.disabled = animating;
+      [...document.querySelectorAll('.thumb')].forEach((thumb, i) => thumb.classList.toggle('active', i === current));
+    }
+
+    function renderThumbs() {
+      pages.forEach((src, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'thumb';
+        btn.innerHTML = `<img src="${src}" alt="縮圖 ${i + 1}"><span>${i + 1}</span>`;
+        btn.addEventListener('click', () => jumpTo(i));
+        thumbs.appendChild(btn);
+      });
+      updateUI();
+    }
+
+    function waitTransition(el) {
+      return new Promise(resolve => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          el.removeEventListener('transitionend', onEnd);
+          resolve();
+        };
+        const onEnd = e => {
+          if (e.propertyName === 'transform') finish();
+        };
+        el.addEventListener('transitionend', onEnd);
+        setTimeout(finish, 1200);
+      });
+    }
+
+    async function flipTo(target) {
+      if (animating || target === current || target < 0 || target >= pages.length) return;
+      animating = true;
+      updateUI();
+
+      const forward = target > current;
+      leaf.className = `turning-leaf ${forward ? 'forward' : 'backward'} show`;
+
+      if (forward) {
+        leftHalf.style.backgroundImage = `url('${pages[current]}')`;
+        rightHalf.style.backgroundImage = `url('${pages[target]}')`;
+        leftHalf.classList.add('shadowed');
+        leafFrontArt.style.backgroundImage = `url('${pages[target]}')`;
+        leafBackArt.style.backgroundImage = `url('${pages[target]}')`;
+        leafFrontArt.style.backgroundPosition = 'left center';
+        leafBackArt.style.backgroundPosition = 'left center';
+        leaf.style.transform = 'rotateY(0deg)';
+      } else {
+        leftHalf.style.backgroundImage = `url('${pages[target]}')`;
+        rightHalf.style.backgroundImage = `url('${pages[current]}')`;
+        rightHalf.classList.add('shadowed');
+        leafFrontArt.style.backgroundImage = `url('${pages[target]}')`;
+        leafBackArt.style.backgroundImage = `url('${pages[target]}')`;
+        leafFrontArt.style.backgroundPosition = 'right center';
+        leafBackArt.style.backgroundPosition = 'right center';
+        leaf.style.transform = 'rotateY(0deg)';
+      }
+
+      void leaf.offsetWidth;
+      leaf.classList.add('animating');
+      leaf.style.transform = forward ? 'rotateY(-180deg)' : 'rotateY(180deg)';
+
+      await waitTransition(leaf);
+
+      current = target;
+      animating = false;
+      leaf.className = 'turning-leaf forward';
+      leaf.style.transform = '';
+      updateUI();
+    }
+
+    function next() { if (current < pages.length - 1) flipTo(current + 1); }
+    function prev() { if (current > 0) flipTo(current - 1); }
+
+    async function jumpTo(target) {
+      if (animating || target === current) return;
+      if (Math.abs(target - current) === 1) {
+        await flipTo(target);
+        return;
+      }
+      current = target;
+      updateUI();
+    }
+
+    prevBtn.addEventListener('click', prev);
+    nextBtn.addEventListener('click', next);
+    leftZone.addEventListener('click', prev);
+    rightZone.addEventListener('click', next);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') next();
+      if (e.key === 'ArrowLeft') prev();
+    });
+    autoBtn.addEventListener('click', () => {
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+        autoBtn.textContent = '自動翻頁';
+        return;
+      }
+      autoBtn.textContent = '停止自動';
+      autoTimer = setInterval(() => {
+        if (animating) return;
+        if (current >= pages.length - 1) {
+          current = 0;
+          updateUI();
+        } else {
+          next();
+        }
+      }, 2600);
+    });
+
+    renderThumbs();
+  </script>
+</body>
+</html>
